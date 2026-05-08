@@ -1,0 +1,31 @@
+service: inference-gateway
+deployment_strategy: sequential
+
+pipeline:
+  system: jenkins
+  job: deploy-inference-gateway-prod
+
+approval:
+  required: true
+  system: pagerduty
+  approver_group: platform-infra-oncall
+
+regions:
+  - us-west-1
+  - us-east-1
+
+health_check:
+  endpoint: /healthz
+  expected_status: 200
+  timeout_seconds: 30
+
+rollback:
+  mode: manual
+  script: rollback-gateway.sh
+  requires_ssh: true
+  controller_host: deploy-controller.internal
+
+dependencies:
+  - inference-router-v2
+  - redis-session-cache
+  - legacy-routing-service
