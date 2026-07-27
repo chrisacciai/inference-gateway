@@ -1,43 +1,31 @@
-apiVersion: argoproj.io/v1alpha1
-kind: Rollout
-metadata:
-  name: inference-gateway
-  namespace: production
-spec:
-  replicas: 12
-  strategy:
-    canary:
-      steps:
-        - setWeight: 10
-        - pause:
-            duration: 5m
-        - setWeight: 50
-        - pause:
-            duration: 10m
-        - setWeight: 100
-      analysis:
-        templates:
-          - templateName: inference-gateway-health
-        args:
-          - name: service-name
-            value: inference-gateway
-      abortScaleDownDelaySeconds: 30
-  selector:
-    matchLabels:
-      app: inference-gateway
-  template:
-    metadata:
-      labels:
-        app: inference-gateway
-    spec:
-      containers:
-        - name: inference-gateway
-          image: cursor/inference-gateway:latest
-          ports:
-            - containerPort: 8080
-          readinessProbe:
-            httpGet:
-              path: /readyz
-              port: 8080
-            initialDelaySeconds: 10
-            periodSeconds: 5
+service: inference-gateway
+deployment_strategy: sequential
+
+pipeline:
+  system: jenkins
+  job: deploy-inference-gateway-prod
+
+approval:
+  required: true
+  system: pagerduty
+  approver_group: platform-infra-oncall
+
+regions:
+  - us-west-1
+  - us-east-1
+
+health_check:
+  endpoint: /healthz
+  expected_status: 200
+  timeout_seconds: 30
+
+rollback:
+  mode: manual
+  script: rollback-gateway.sh
+  requires_ssh: true
+  controller_host: deploy-controller.internal
+
+dependencies:
+  - inference-router-v2
+  - redis-session-cache
+  - legacy-routing-service
